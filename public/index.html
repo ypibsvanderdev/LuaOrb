@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -653,9 +653,9 @@
 
             <div class="nav-group">
                 <div class="nav-label">Overview</div>
-                <div class="nav-item active" onclick="showPanel('dashboard', this)">ðŸ“Š System Analytics</div>
-                <div class="nav-item" onclick="showPanel('explorer', this)">ðŸ“ Script Repository</div>
-                <div class="nav-item" onclick="showPanel('mailbox', this)">âœ‰ï¸ Member Mailbox <span id="mail-count"
+                <div class="nav-item active" onclick="showPanel('dashboard', this)">📊 System Analytics</div>
+                <div class="nav-item" onclick="showPanel('explorer', this)">📁 Script Repository</div>
+                <div class="nav-item" onclick="showPanel('mailbox', this)">✉️ Member Mailbox <span id="mail-count"
                         class="badge-danger"
                         style="display:none; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: auto;">0</span>
                 </div>
@@ -663,13 +663,13 @@
 
             <div class="nav-group" style="margin-top: 32px;">
                 <div class="nav-label">Encryption</div>
-                <div class="nav-item" onclick="showPanel('crypt', this)">ðŸ›¡ï¸ Infinity Crypt</div>
-                <div class="nav-item" onclick="showPanel('obf-pure', this)">â˜£ï¸ LuaOrb Obfuscator</div>
+                <div class="nav-item" onclick="showPanel('crypt', this)">🛡️ Infinity Crypt</div>
+                <div class="nav-item" onclick="showPanel('obf-pure', this)">☣️ LuaOrb Obfuscator</div>
             </div>
 
             <div class="nav-group" style="margin-top: 32px;">
                 <div class="nav-label">Security</div>
-                <div class="nav-item" onclick="showPanel('settings', this)">âš™ï¸ Security Settings</div>
+                <div class="nav-item" onclick="showPanel('settings', this)">⚙️ Security Settings</div>
             </div>
 
             <div class="status-footer">
@@ -682,7 +682,7 @@
                 </div>
                 <div class="nav-item btn-danger" onclick="logout()"
                     style="padding: 10px 20px; border-radius: 8px; font-size: 12px; border: none; justify-content: center; margin-bottom: 15px;">
-                    ðŸšª Logout Hub
+                    🚪 Logout Hub
                 </div>
                 <div style="font-size: 12px; color: #606580; display: flex; align-items: center;">
                     <span class="pulse-dot"></span>
@@ -796,29 +796,29 @@
             <!-- PURE @#$% VANDER-OBFUSCATOR ^&* -->
             <div id="obf-pure" class="panel">
                 <div class="panel-header">
-                    <h2>â˜£ï¸ SUSHI OBFUSCATOR</h2>
+                    <h2>☣️ SUSHI OBFUSCATOR</h2>
                     <p>Elite @#$% bytecode manipulation for private extraction.</p>
                 </div>
                 <div class="grid" style="grid-template-columns: 1fr 1fr;">
                     <div class="card" style="border-color: var(--vander);">
-                        <h3 style="color:var(--vander)">â˜£ï¸ @#$% SOURCE ^&*</h3>
+                        <h3 style="color:var(--vander)">☣️ @#$% SOURCE ^&*</h3>
                         <textarea id="pure-input"
                             style="height: 380px; background: #000; color: #0f0; font-family: 'JetBrains Mono'; border: 1px solid #111;"
                             placeholder="-- @#$% PASTE RAW LUA HERE ^&*"></textarea>
                         <button class="btn" style="width: 100%; margin-top: 20px; height: 50px;"
                             onclick="executePureObf()">
-                            â˜£ï¸ EXECUTE @#$% PROTECTION ^&*
+                            ☣️ EXECUTE @#$% PROTECTION ^&*
                         </button>
                     </div>
 
                     <div class="card" style="border-color: var(--accent);">
-                        <h3 style="color:var(--accent)">â˜£ï¸ *&^% BYTECODE #$%@</h3>
+                        <h3 style="color:var(--accent)">☣️ *&^% BYTECODE #$%@</h3>
                         <textarea id="pure-output" readonly
                             style="height: 380px; background: #000; color: var(--accent); font-family: 'JetBrains Mono'; border: 1px solid #111;"
                             placeholder="-- %$#@ PROTECTED OUTPUT *&^%"></textarea>
                         <button class="btn btn-outline" style="width: 100%; margin-top: 20px;"
                             onclick="copyVal('pure-output')">
-                            â˜£ï¸ COPY @#$% DATA ^&*
+                            ☣️ COPY @#$% DATA ^&*
                         </button>
                     </div>
                 </div>
@@ -937,7 +937,7 @@
                         </div>
                         <div id="invite-area"
                             style="display:none; padding:10px; background:rgba(0,242,255,0.05); border:1px dashed var(--vander); border-radius:8px;">
-                            <p style="margin:0; font-size:11px; color:var(--vander)">ðŸ“Ž Attaching invite: <b
+                            <p style="margin:0; font-size:11px; color:var(--vander)">📎 Attaching invite: <b
                                     id="invite-file"></b></p>
                         </div>
                     </div>
@@ -1090,7 +1090,7 @@
                                 <p style="margin:0; font-size:14px; line-height:1.6; color:#fff;">${m.content}</p>
                                 <div style="margin-top:12px; font-size:10px; color:#404560; display:flex; justify-content:space-between;">
                                     <span>RECEIVED: ${new Date(m.timestamp).toLocaleString()}</span>
-                                    ${m.type === 'invite' ? `<a href="#" onclick="showPanel('explorer')" style="color:var(--vander); text-decoration:none;">VIEW SHARED ASSET â†’</a>` : ''}
+                                    ${m.type === 'invite' ? `<a href="#" onclick="showPanel('explorer')" style="color:var(--vander); text-decoration:none;">VIEW SHARED ASSET →</a>` : ''}
                                 </div>
                             </div>
                         `;
@@ -1291,9 +1291,9 @@
 
             async function executePureObf() {
                 const script = document.getElementById('pure-input').value;
-                if (!script) return notify("â˜£ï¸ @#$% SOURCE REQUIRED ^&*");
+                if (!script) return notify("☣️ @#$% SOURCE REQUIRED ^&*");
 
-                notify("â˜£ï¸ COMMENCING @#$% PROTECTION ^&*...");
+                notify("☣️ COMMENCING @#$% PROTECTION ^&*...");
                 try {
                     const res = await fetch('/api/obfuscate/pure', {
                         method: 'POST',
@@ -1303,11 +1303,11 @@
                     const data = await res.json();
                     if (data.success) {
                         document.getElementById('pure-output').value = data.result;
-                        notify("â˜£ï¸ @#$% PROTECTION COMPLETE ^&*");
+                        notify("☣️ @#$% PROTECTION COMPLETE ^&*");
                     } else {
-                        notify("â˜£ï¸ FATAL @#$% ERROR: " + data.error);
+                        notify("☣️ FATAL @#$% ERROR: " + data.error);
                     }
-                } catch (e) { notify("â˜£ï¸ RELAY @#$% FAILED ^&*"); }
+                } catch (e) { notify("☣️ RELAY @#$% FAILED ^&*"); }
             }
 
             function notify(m) {
