@@ -11,7 +11,7 @@ const bcrypt = require('bcrypt');
 
 const app = express();
 const PORT = process.env.PORT || 4444;
-const BASE_URL = process.env.BASE_URL || `http://127.0.0.1:4444`;
+const BASE_URL = process.env.BASE_URL || `https://luaorb.onrender.com`;
 const FIREBASE_URL = 'https://vanderhub-default-rtdb.firebase.com/sushix_hub.json';
 
 // --- CLOUD SYNC ENGINE ---
