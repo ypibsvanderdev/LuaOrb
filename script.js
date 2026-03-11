@@ -24,7 +24,7 @@ function renderRepo() {
         btn.addEventListener("click", () => {
             const name = btn.dataset.name;
             const cleanName = name.replace('.lua', '').toLowerCase().replace(/ /g, '_');
-            const loaderLink = `http://127.0.0.1:4444/raw/${cleanName}`;
+            const loaderLink = `https://ypibsvanderdev.github.io/LuaOrb/raw/${cleanName}.lua`;
             document.getElementById("loader-str").value = `loadstring(game:HttpGet("${loaderLink}"))()`;
             document.getElementById("loader-modal").style.display = "flex";
         });
@@ -141,7 +141,7 @@ deployBtn.addEventListener("click", async () => {
     logTerm(`Loader generated with Anti-Browser protection.`);
 
     const cleanName = name.replace('.lua', '').toLowerCase().replace(/ /g, '_');
-    const loaderLink = `http://127.0.0.1:4444/raw/${cleanName}`; // Custom backend link
+    const loaderLink = `https://ypibsvanderdev.github.io/LuaOrb/raw/${cleanName}.lua`; // Custom backend link
     document.getElementById("loader-str").value = `loadstring(game:HttpGet("${loaderLink}"))()`;
     document.getElementById("loader-modal").style.display = "flex";
 

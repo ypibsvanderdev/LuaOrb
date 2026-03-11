@@ -1152,7 +1152,7 @@
                 if (!scriptData) return notify("Access Denied.");
 
                 document.getElementById('view-title').innerText = name;
-                document.getElementById('view-loader').value = `loadstring(game:HttpGet("http://127.0.0.1:4444/raw/${name}"))()`;
+                document.getElementById('view-loader').value = `loadstring(game:HttpGet("https://ypibsvanderdev.github.io/LuaOrb/raw/${name}"))()`;
                 document.getElementById('view-content').value = scriptData.content || "-- No content stored.";
 
                 const canManage = scriptData ? scriptData.isOwner : false;
@@ -1175,7 +1175,7 @@
                 }
 
                 setTimeout(() => {
-                    const loader = `loadstring(game:HttpGet("http://127.0.0.1:4444/raw/${name}"))()`;
+                    const loader = `loadstring(game:HttpGet("https://ypibsvanderdev.github.io/LuaOrb/raw/${name}"))()`;
                     document.getElementById('loaderVal').value = loader;
                     document.getElementById('resultCard').style.display = 'block';
 
