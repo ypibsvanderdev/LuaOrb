@@ -1141,7 +1141,7 @@
                 if (!res.ok) return notify(data.error || "Access Denied.");
 
                 document.getElementById('view-title').innerText = name;
-                document.getElementById('view-loader').value = `loadstring(game:HttpGet("https://sushix-protect-elite.onrender.com/raw/${name}"))()`;
+                document.getElementById('view-loader').value = `loadstring(game:HttpGet("https://luaorb.onrender.com/raw/${name}"))()`;
                 document.getElementById('view-content').value = data.content;
 
                 const scriptData = lastScripts.find(s => s.name === name);
