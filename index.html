@@ -1283,11 +1283,14 @@
 
             async function deleteCur() {
                 if (!confirm("Are you sure you want to permanently shred this asset?")) return;
-                await fetch('/api/scripts/' + currentFile, { method: 'DELETE' });
+
+                let scripts = JSON.parse(localStorage.getItem('SUSHIX_scripts')) || [];
+                scripts = scripts.filter(s => s.name !== currentFile);
+                localStorage.setItem('SUSHIX_scripts', JSON.stringify(scripts));
+
                 notify("File purged from encrypted vault.");
                 showPanel('explorer');
                 loadFiles();
-                updateStats();
             }
 
             function showPanel(id, el) {
@@ -1302,25 +1305,45 @@
                 if (id === 'settings') loadHubSettings();
             }
 
+            function luaorbObfuscate(source) {
+                if (!source || source.trim() === '') return "-- [!] Error: No input provided.";
+                let protectionHeader = `-- [[ SUSHIX ENVIRONMENT INTEGRITY CHECK ]] --\nlocal function _O()\n    local _h = {["User-Agent"] = "Roblox/WinInet"}\n    if not (identifyexecutor or getexecutorname) then\n        while true do end\n    end\nend\npcall(_O)\n`;
+                const lines = source.split('\n').filter(l => l.trim() !== '');
+                const states = [];
+                lines.forEach((line, index) => {
+                    states.push({ id: (index + 1) * 100, code: line, next: (index + 1 < lines.length) ? (index + 2) * 100 : 0 });
+                });
+                const sym = { SV: "_S" + Math.random().toString(36).substr(2, 5), DS: "_D" + Math.random().toString(36).substr(2, 5), ENV: "_E" + Math.random().toString(36).substr(2, 5) };
+                let lua = protectionHeader + `\nlocal ${sym.ENV} = {loadstring or load, table.concat, string.char };\n`;
+                lua += `local function run(...)\n`;
+                lua += `    local ${sym.SV} = ${states[0] ? states[0].id : 0};\n`;
+                lua += `    local ${sym.DS} = {\n`;
+                states.forEach(s => {
+                    const key = Math.floor(Math.random() * 255);
+                    const bytes = Array.from(new TextEncoder().encode(s.code));
+                    const enc = bytes.map(b => b ^ key);
+                    lua += `        [${s.id}] = function() local _c={${enc.join(',')}}; local _k=${key}; local _r={};\n`;
+                    lua += `        for i=1,#_c do _r[i]=${sym.ENV}[3]((bit32 and bit32.bxor(_c[i],_k) or _c[i]-_k%256)) end;\n`;
+                    lua += `        ${sym.ENV}[1](${sym.ENV}[2](_r))(); return ${s.next} end,\n`;
+                });
+                lua += `    };\n    while ${sym.SV} ~= 0 do ${sym.SV} = ${sym.DS}[${sym.SV}]() end\nend\nreturn run(...)\n`;
+                return lua;
+            }
+
             async function executePureObf() {
                 const script = document.getElementById('pure-input').value;
                 if (!script) return notify("☣️ @#$% SOURCE REQUIRED ^&*");
 
                 notify("☣️ COMMENCING @#$% PROTECTION ^&*...");
-                try {
-                    const res = await fetch('/api/obfuscate/pure', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ script })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        document.getElementById('pure-output').value = data.result;
+                setTimeout(() => {
+                    try {
+                        let result = luaorbObfuscate(script);
+                        document.getElementById('pure-output').value = result;
                         notify("☣️ @#$% PROTECTION COMPLETE ^&*");
-                    } else {
-                        notify("☣️ FATAL @#$% ERROR: " + data.error);
+                    } catch (e) {
+                        notify("☣️ FATAL @#$% ERROR: " + e.message);
                     }
-                } catch (e) { notify("☣️ RELAY @#$% FAILED ^&*"); }
+                }, 1000);
             }
 
             function notify(m) {
