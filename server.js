@@ -1,98 +1,424 @@
-const http = require('http');
+const express = require('express');
+const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const axios = require('axios');
+const { OAuth2Client } = require('google-auth-library');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
+const bcrypt = require('bcrypt');
 
-const accessDeniedHtml = `
+const app = express();
+const PORT = process.env.PORT || 4444;
+const BASE_URL = process.env.BASE_URL || `http://127.0.0.1:4444`;
+const FIREBASE_URL = 'https://vanderhub-default-rtdb.firebase.com/sushix_hub.json';
+
+// --- CLOUD SYNC ENGINE ---
+const db = {
+    vault: {},
+    users: [],
+    registry: { whitelist: [], blacklist: [] },
+    threats: [],
+    messages: [],
+    settings: {
+        globalKillSwitch: false,
+        antiDump: true,
+        autoBlacklist: true,
+        privacyMode: false
+    }
+};
+
+async function syncToCloud() {
+    try {
+        await axios.put(FIREBASE_URL, db);
+        console.log("[CLOUD]: Data persisted to Firebase.");
+    } catch (e) {
+        console.error("[CLOUD]: Sync failed:", e.message);
+    }
+}
+
+async function loadFromCloud() {
+    try {
+        const res = await axios.get(FIREBASE_URL);
+        if (res.data) {
+            db.vault = res.data.vault || {};
+            db.users = res.data.users || [];
+            db.registry = res.data.registry || { whitelist: [], blacklist: [] };
+            db.threats = res.data.threats || [];
+            db.messages = res.data.messages || [];
+            db.settings = res.data.settings || { globalKillSwitch: false, antiDump: true, autoBlacklist: true, privacyMode: false };
+            console.log("[CLOUD]: Database loaded successfully.");
+        } else {
+            console.log("[CLOUD]: Initializing empty database...");
+            await syncToCloud();
+        }
+    } catch (e) {
+        console.error("[CLOUD]: Load failed:", e.message);
+    }
+}
+
+// Initial Load
+loadFromCloud();
+
+const JWT_SECRET = 'VANDER-HUB-ULTRA-SECRET-777';
+const GOOGLE_CLIENT_ID = '945575151017-o0mh8usjvn9r23lnid2th5g13qg8lpgv.apps.googleusercontent.com';
+const gClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+
+app.use(cors());
+app.use(express.json());
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// --- AUTH MIDDLEWARE ---
+const authenticate = (req, res, next) => {
+    const token = req.cookies.vander_session;
+    if (!token) return res.status(401).json({ error: "UNAUTHORIZED: Access via Google Login required." });
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (err) {
+        res.status(401).json({ error: "SESSION EXPIRED: Please re-login with Google." });
+    }
+};
+
+// --- SUSHIX ELITE ENGINE V8.3 ---
+class SushiXEliteEngine {
+    constructor() {
+        this.metrics = { total_crypts: 0, threats_neutralized: 0, active_users: 82 };
+        setTimeout(() => this.updateTotalThreats(), 5000);
+    }
+    updateTotalThreats() {
+        this.metrics.threats_neutralized = db.threats.length;
+    }
+    randomStr(l) { return crypto.randomBytes(l).toString('hex').substring(0, l); }
+    protect(source, name, options = {}) {
+        const scriptId = "SX_ELITE_" + this.randomStr(12).toUpperCase();
+        const scriptName = name.endsWith('.lua') ? name : name + '.lua';
+        const fileName = scriptName.replace(/\./g, '_dot_');
+
+        // Save ONLY Obfuscated Code to Cloud Vault
+        const protectedSource = obfuscateLua(source);
+        db.vault[fileName] = {
+            source: protectedSource, // NO RAW CODE ALLOWED IN DATABASE
+            owner: options.owner || 'system',
+            sharedWith: [],
+            createdAt: new Date().toISOString()
+        };
+        syncToCloud();
+
+        this.metrics.total_crypts++;
+        return { success: true, id: scriptId, size: source.length };
+    }
+}
+const engine = new SushiXEliteEngine();
+
+app.get('/api/analytics', authenticate, (req, res) => res.json({ ...engine.metrics, uptime: process.uptime(), server_status: "MONITORING" }));
+app.get('/api/threats', authenticate, (req, res) => res.json(db.threats));
+
+// Whitelist endpoints removed for simplicity
+
+app.post('/api/obfuscate', authenticate, (req, res) => {
+    const { script, name } = req.body;
+    const data = engine.protect(script, name, { owner: req.user.email });
+    const fileName = name.endsWith('.lua') ? name : name + '.lua';
+    // Back to Classic Route
+    const loaderCode = `loadstring(game:HttpGet("${BASE_URL}/raw/${fileName}"))()`;
+    res.json({ ...data, loader: loaderCode });
+});
+
+app.post('/api/obfuscate/pure', authenticate, (req, res) => {
+    const { script } = req.body;
+    if (!script) return res.status(400).json({ error: "Source required." });
+    const result = obfuscateLua(script);
+    res.json({ success: true, result });
+});
+
+// ==================== VANDER OBFUSCATOR ENGINE ====================
+function obfuscateLua(source) {
+    const key = Math.floor(Math.random() * 255) + 1;
+    const bytes = Buffer.from(source, 'utf8');
+    const encrypted = [];
+    for (let i = 0; i < bytes.length; i++) {
+        encrypted.push(bytes[i] ^ key);
+    }
+
+    let lua = `--[[\n    ☣️ @#$%& SUSHI OBFUSCATOR v10.0 ACTIVATED *&^%$ \n    SHIELD: ANTI-ENV // ANTI-LOG // LAYER: TITAN\n--]]\n`;
+    lua += `local _G = getfenv() or _G; `;
+    lua += `local _P = {print, warn, error, rconsoleprint, rconsolewarn}; `;
+    lua += `for _, _v in pairs(_G) do for _, _p in pairs(_P) do if _v == _p and _v ~= print and _v ~= warn then _G = nil end end end; `;
+    lua += `local _k = ${key}; `;
+    lua += `local _t = {${encrypted.join(',')}}; `;
+    lua += `local _b = bit32 and bit32.bxor or function(a,b) local r,m=0,1 while a>0 or b>0 do if a%2~=b%2 then r=r+m end a,b,m=math.floor(a/2),math.floor(b/2),m*2 end return r end; `;
+    lua += `local _r = {}; `;
+    lua += `for i=1,#_t do _r[i] = string.char(_b(_t[i], _k)) end; `;
+    lua += `local _L = (loadstring or load); `;
+    lua += `if tostring(_L):find("native") or tostring(_L):find("function") then `;
+    lua += `    local _f, _e = _L(table.concat(_r)); `;
+    lua += `    if _f then _f() else error("[SUSHIX-VM]: @#$%& CORRUPTION DETECTED *&^%$ " .. tostring(_e)) end; `;
+    lua += `else `;
+    lua += `    while true do end; `;
+    lua += `end; `;
+    return lua;
+}
+
+// Obsolete route removed for security
+// loader points to /v1/tunnel/serve/ now
+
+app.delete('/api/scripts/:name', authenticate, (req, res) => {
+    const fileName = req.params.name.replace(/\./g, '_dot_');
+    const file = db.vault[fileName];
+    if (file) {
+        if (file.owner !== req.user.email && req.user.email !== 'meqda@gmail.com') {
+            return res.status(403).json({ error: "Only the owner can delete this script." });
+        }
+        delete db.vault[fileName];
+        syncToCloud();
+        res.json({ success: true });
+    } else res.status(404).json({ error: "File not found" });
+});
+
+// --- COLLABORATION & MESSAGING SYSTEM ---
+app.get('/api/users/search', authenticate, (req, res) => {
+    const query = (req.query.q || '').toLowerCase();
+    const results = db.users
+        .filter(u => (u.name || '').toLowerCase().includes(query))
+        .map(u => ({ username: u.name }));
+    res.json(results);
+});
+
+app.post('/api/messages/send', authenticate, (req, res) => {
+    const { to, content, type = 'text', scriptName = null } = req.body;
+    if (!to || !content) return res.status(400).json({ error: "Recipient and content required." });
+
+    const msg = {
+        id: crypto.randomUUID(),
+        from: req.user.username,
+        to,
+        content,
+        type,
+        scriptName,
+        timestamp: new Date().toISOString(),
+        read: false
+    };
+
+    db.messages.push(msg);
+
+    // If it's an invite, automatically add permission
+    if (type === 'invite' && scriptName) {
+        const fileName = scriptName.replace(/\./g, '_dot_');
+        if (db.vault[fileName] && !db.vault[fileName].sharedWith.includes(to)) {
+            db.vault[fileName].sharedWith.push(to);
+        }
+    }
+
+    syncToCloud();
+    res.json({ success: true });
+});
+
+app.get('/api/messages', authenticate, (req, res) => {
+    const userMsgs = db.messages.filter(m => m.to === req.user.username).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    res.json(userMsgs);
+});
+
+// --- SECURITY SETTINGS ---
+app.get('/api/settings', authenticate, (req, res) => res.json(db.settings));
+app.post('/api/settings', authenticate, (req, res) => {
+    if (req.user.email !== 'meqda@gmail.com') return res.status(403).json({ error: "Only the Root Admin can change security settings." });
+    db.settings = { ...db.settings, ...req.body };
+    syncToCloud();
+    res.json({ success: true, settings: db.settings });
+});
+
+const PROTECTION_HTML = `
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SUSHIX PROTECT | ACCESS RESTRICTED</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Access Denied | SushiX Protector</title>
     <style>
-        body { margin: 0; padding: 0; background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: 'Fira Code', monospace; color: #fff; background-image: radial-gradient(circle at 50% 50%, #1a0505 0%, #000 100%); }
-        .danger-box { text-align: center; }
-        .fas.fa-biohazard { color: #ff3366; font-size: 80px; margin-bottom: 20px; text-shadow: 0 0 30px rgba(255, 51, 102, 0.6); animation: pulseDanger 2s infinite; }
-        h1 { font-size: 48px; letter-spacing: 5px; color: #ff3366; margin: 0; text-transform: uppercase; }
-        p.subtitle { color: #ff88a0; margin-top: 15px; font-size: 16px; }
-        .details { margin-top: 40px; background: rgba(255, 51, 102, 0.05); border: 1px solid #ff3366; padding: 24px; border-radius: 12px; max-width: 600px; text-align: left; display: inline-block; width: 100%; box-sizing: border-box; }
-        .details p { margin: 0 0 10px 0; color: #ff88a0; font-size: 14px; }
-        .details span { color: #fff; }
-        .log-msg { margin-top: 20px; font-size: 12px; color: #ff3366; }
-        @keyframes pulseDanger { 0% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: 0.8; } }
+        body { background: #000; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
+        .container { text-align: center; }
+        .shield { font-size: 80px; margin-bottom: 20px; display: block; filter: drop-shadow(0 0 20px #4d94ff) drop-shadow(0 0 40px #ff4d00); animation: pulse 2s infinite ease-in-out; }
+        h1 { font-size: 28px; letter-spacing: 2px; font-weight: 800; margin: 0; text-transform: uppercase; color: #fff; }
+        p { color: #808080; font-size: 10px; letter-spacing: 1px; font-weight: 600; margin-top: 10px; text-transform: uppercase; }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); opacity: 0.8; } }
     </style>
 </head>
 <body>
-    <div class="danger-box">
-        <i class="fas fa-biohazard"></i>
-        <h1>ACCESS RESTRICTED</h1>
-        <p class="subtitle">TITAN FIREWALL HAS BLOCKED CONNECTION TO THE SUSHIX VAULT</p>
-        <div class="details">
-            <p>> Analyzing Target Asset...</p>
-            <p>> Origin Node: <span id="ua-text">Resolving...</span></p>
-            <p>> Violation Details: <span>Invalid Execution Handshake (Direct URI Browser Access)</span></p>
-            <div class="log-msg"><i class="fas fa-exclamation-triangle"></i> DUMP ATTEMPT LOGGED INCIDENT RECORDED</div>
-        </div>
+    <div class="container">
+        <span class="shield">🛡️</span>
+        <h1>SUSHI OBFUSCATOR: ACCESS DENIED</h1>
+        <p>BROWSER INTEGRITY VIOLATION | UNAUTHORIZED SOURCE REQUEST</p>
     </div>
-    <script>
-        document.getElementById('ua-text').innerText = navigator.userAgent;
-    </script>
 </body>
-</html>
-`;
+</html>`;
 
-const mimeTypes = {
-    '.html': 'text/html',
-    '.js': 'text/javascript',
-    '.css': 'text/css',
-    '.png': 'image/png'
-};
+const accessLogs = {}; // IP Ratelimiting cache
 
-const server = http.createServer((req, res) => {
-    let urlPath = req.url.split('?')[0];
+function validateAccess(req) {
+    const ua = (req.headers['user-agent'] || '').toLowerCase();
+    const h = req.headers;
+    const ip = req.ip;
+    const accept = (h['accept'] || '').toLowerCase();
+    const referer = (h['referer'] || '').toLowerCase();
 
-    // Loadstring URLs handler
-    if (urlPath.startsWith('/raw/')) {
-        const ua = (req.headers['user-agent'] || '').toLowerCase();
-        const isRoblox = ua.includes('roblox') || ua.includes('wininet');
-
-        // Serve the brutal Access Denied page if it's a browser request
-        if (!isRoblox) {
-            res.writeHead(403, { 'Content-Type': 'text/html' });
-            res.end(accessDeniedHtml);
-            return;
-        }
-
-        // Serve the real script payload if it's Roblox
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end('-- [ SUSHIX-SECURE VAULT ]\nprint("Successfully Executed from SushiX Cloud Vault!")\n');
-        return;
+    // Perma-Blacklist Check (Skip if it's the admin or a confirmed pass)
+    if (db.registry.blacklist.includes(ip) && !ua.includes('roblox')) {
+        req.lastFailReason = "PERMA_BANNED_IP";
+        return false;
     }
 
-    // Basic Static Server for Dashboard
-    if (urlPath === '/' || urlPath === '/index.html') urlPath = '/index.html';
+    // Track attempts
+    accessLogs[ip] = accessLogs[ip] || { attempts: 0, lastTime: 0 };
 
-    const extname = String(path.extname(urlPath)).toLowerCase();
-    const contentType = mimeTypes[extname] || 'application/octet-stream';
+    // --- TITAN CALIBRATED ENGINE ---
 
-    const filePath = path.join(__dirname, urlPath);
-    fs.readFile(filePath, (error, content) => {
-        if (error) {
-            if (error.code == 'ENOENT') {
-                res.writeHead(404);
-                res.end('Resource Not Found\\n');
-            } else {
-                res.writeHead(500);
-                res.end('Server Error\\n');
+    // 1. HARD BROWSER FINGERPRINTS (Executors NEVER send these)
+    const hardFingerprints = [
+        'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform',
+        'sec-fetch-user', 'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site'
+    ];
+    const hasHardFingerprint = hardFingerprints.some(key => h[key]);
+
+    // 2. IDENTIFY CLIENT
+    const whitelist = ['delta', 'fluxus', 'codex', 'arceus', 'hydrogen', 'vegax', 'robloxproxy', 'android', 'iphone', 'ipad'];
+    const isWhitelisted = whitelist.some(k => ua.includes(k));
+    const isRobloxEngine = ua.includes('roblox') || ua === 'roblox/wininet';
+
+    // 3. FAIL LOGIC (Priority Based)
+    let failReason = null;
+
+    // RULE A: Absolute Block for Hard Fingerprints (Chrome/Edge/Safari)
+    if (hasHardFingerprint) {
+        failReason = "HARD_BROWSER_FINGERPRINT";
+    }
+    // RULE B: Block obvious automation libraries
+    else if (accept === 'application/json, text/plain, */*' || h['x-axios-client']) {
+        failReason = "AXIOS_SIGNATURE_DETECTED";
+    }
+    else if (ua.includes('node-fetch') || ua.includes('got/') || ua.includes('superagent')) {
+        failReason = "NODE_AUTOMATION_DETECTED";
+    }
+    // RULE C: Block Direct Browsers (HTML request)
+    else if (accept.includes('text/html') || accept.includes('application/xhtml+xml')) {
+        failReason = "DIRECT_BROWSER_NAVIGATE";
+    }
+    // RULE D: The "Spoof Trap" (Relaxed: allow accept-language for mobile executors)
+    else if (isRobloxEngine && referer.includes('luarmor')) {
+        failReason = "LUARMOR_SPOOF_TRAP";
+    }
+    // RULE E: Whitelist Enforcement
+    else if (!isWhitelisted && !isRobloxEngine) {
+        failReason = "UNAUTHORIZED_CLIENT_UA";
+    }
+
+    if (failReason) {
+        accessLogs[ip].attempts++;
+
+        // Auto-Blacklist after 5 attempts (loosened from 3 to allow testing)
+        if (accessLogs[ip].attempts >= 5) {
+            if (!db.registry.blacklist.includes(ip)) {
+                db.registry.blacklist.push(ip);
+                syncToCloud();
             }
-        } else {
-            res.writeHead(200, { 'Content-Type': contentType });
-            res.end(content, 'utf-8');
         }
-    });
+
+        req.lastFailReason = `${failReason} (Attempt ${accessLogs[ip].attempts})`;
+        return false;
+    }
+
+    // Success: Reset failures for this IP on a successful bypass
+    accessLogs[ip].attempts = 0;
+    return true;
+}
+
+app.get('/raw/:name', (req, res) => {
+    if (!validateAccess(req)) {
+        const method = db.settings.antiDump ? "BOT_BAIT_BLOCKCHAIN_700KB" : (req.lastFailReason || "ILLEGAL_BROWSER_FETCH");
+        db.threats.unshift({ ip: req.ip, method: method, time: new Date().toISOString(), userAgent: req.headers['user-agent'] });
+        syncToCloud();
+
+        if (db.settings.antiDump) {
+            const junkHex = crypto.randomBytes(400 * 1024).toString('hex');
+            const garbage = `--[[ SUSHI SECURITY: DUMP DETECTED ]]\nlocal _ = "${junkHex}"\nwhile true do end`;
+            return res.status(200).set('Content-Type', 'text/plain').send(garbage);
+        }
+        return res.status(403).send(PROTECTION_HTML);
+    }
+
+    const fileName = (req.params.name.endsWith('.lua') ? req.params.name : req.params.name + '.lua').replace(/\./g, '_dot_');
+    const file = db.vault[fileName];
+
+    if (file) {
+        res.setHeader('Content-Type', 'text/plain');
+        res.send(file.source);
+    } else res.status(404).send("-- SUSHIX: Raw target not found.");
 });
 
-server.listen(4444, () => {
-    console.log('SushiX Protection Server Initialized at http://127.0.0.1:4444/');
+app.get('/api/scripts', authenticate, (req, res) => {
+    if (!validateAccess(req) && !req.headers.referer) return res.status(403).send(PROTECTION_HTML);
+    try {
+        const scripts = Object.keys(db.vault)
+            .filter(key => {
+                const f = db.vault[key];
+                return f.owner === req.user.email || (f.sharedWith && f.sharedWith.includes(req.user.email)) || req.user.email === 'meqda@gmail.com';
+            })
+            .map(key => {
+                const f = db.vault[key];
+                return {
+                    name: key.replace(/_dot_/g, '.'),
+                    size: f.source.length,
+                    date: f.createdAt,
+                    isOwner: f.owner === req.user.email
+                };
+            });
+        res.json({ success: true, scripts });
+    } catch (e) { res.json({ success: false, scripts: [] }); }
+});
+
+app.get('/api/scripts/:name', authenticate, (req, res) => {
+    const fileName = (req.params.name.endsWith('.lua') ? req.params.name : req.params.name + '.lua').replace(/\./g, '_dot_');
+    const file = db.vault[fileName];
+    if (file) {
+        if (file.owner !== req.user.email && (!file.sharedWith || !file.sharedWith.includes(req.user.email)) && req.user.email !== 'meqda@gmail.com') {
+            return res.status(403).json({ error: "ACCESS DENIED: Insufficient permissions." });
+        }
+        // ONLY return obfuscated code even in the UI
+        res.json({ success: true, content: file.source });
+    } else res.status(404).json({ error: "Script not found" });
+});
+
+// --- AUTH SYSTEM: EMAIL & PASSWORD ---
+app.post('/api/auth/login', async (req, res) => {
+    const { password } = req.body;
+
+    if (password !== 'Eman165*') {
+        return res.status(401).json({ error: "INVALID CREDENTIALS" });
+    }
+
+    const user = { id: 'admin', email: 'meqda@gmail.com', name: 'SushiAdmin' };
+    const token = jwt.sign({ id: user.id, email: user.email, username: user.name }, JWT_SECRET, { expiresIn: '7d' });
+    res.cookie('vander_session', token, { httpOnly: true, secure: true, sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000 });
+
+    res.json({ success: true, user: { id: user.id, email: user.email, name: user.name } });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+    res.clearCookie('vander_session');
+    res.json({ success: true });
+});
+
+app.get('/api/auth/me', authenticate, (req, res) => {
+    res.json({ success: true, user: req.user });
+});
+
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+app.listen(PORT, () => {
+    console.log(`\n========================================`);
+    console.log(` SUSHIX PROTECT ELITE V8.5.5 ONLINE`);
+    console.log(` LOCAL: http://localhost:${PORT}`);
+    console.log(` PUBLIC: ${BASE_URL}`);
+    console.log(`========================================\n`);
 });

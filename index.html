@@ -9,7 +9,7 @@
     <link rel="apple-touch-icon" href="logo.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="SUSHIX Protect">
+    <meta name="apple-mobile-web-app-title" content="SushiX Protect">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
@@ -624,12 +624,6 @@
         <i class="fas fa-bars" style="font-size:20px; cursor:pointer;" onclick="toggleSidebar()"></i>
     </div>
 
-    opacity: 0.8;
-    }
-    }
-    </style>
-    </div>
-
     <!-- LOGIN OVERLAY -->
     <div id="login-screen">
         <div class="login-card">
@@ -652,7 +646,7 @@
     <div id="dashboard-container" style="display: flex;">
         <aside class="sidebar">
             <div class="brand">
-                <img src="logo.png" alt="SUSHIX Logo"
+                <img src="logo.png" alt="SushiX Logo"
                     style="width: 42px; height: 42px; border-radius: 8px; border: 1px solid var(--accent); box-shadow: 0 0 15px rgba(255, 77, 0, 0.3);">
                 <h1>SUSHIX<span>PROTECT</span></h1>
             </div>
@@ -704,7 +698,7 @@
             <div id="dashboard" class="panel active">
                 <div class="panel-header">
                     <h2>Elite Dashboard</h2>
-                    <p>Real-time telemetry from the SUSHIX protection network.</p>
+                    <p>Real-time telemetry from the SushiX protection network.</p>
                 </div>
 
                 <div class="grid">
@@ -899,7 +893,7 @@
                         <div>
                             <p style="margin:0; font-weight:700;">Auto-IP Blacklist</p>
                             <p style="margin:2px 0 0 0; font-size:11px; color:#505570;">Automatically ban IPs that
-                                trigger the SUSHIX firewall 3+ times.</p>
+                                trigger the SushiX firewall 3+ times.</p>
                         </div>
                         <label class="switch">
                             <input type="checkbox" id="autoblock-toggle" onchange="updateHubSettings()">
@@ -1107,17 +1101,12 @@
             let lastScripts = [];
             async function loadFiles() {
                 try {
-                    const data = JSON.parse(localStorage.getItem('SUSHIX_scripts')) || [];
-                    lastScripts = data.map(s => ({
-                        name: s.name,
-                        date: new Date().toISOString(),
-                        size: parseInt(s.size) * 1024 || 1024,
-                        isOwner: true,
-                        content: "-- Protected by SUSHIX\\nprint('Placeholder script content locally stored.')"
-                    }));
-
+                    const res = await fetch('/api/scripts');
+                    const data = await res.json();
+                    lastScripts = data.scripts || [];
                     const list = document.getElementById('file-list');
                     list.innerHTML = "";
+
                     const scripts = lastScripts;
 
                     if (scripts.length === 0) {
@@ -1147,14 +1136,15 @@
 
             async function view(name) {
                 currentFile = name;
-
-                const scriptData = lastScripts.find(s => s.name === name);
-                if (!scriptData) return notify("Access Denied.");
+                const res = await fetch('/api/scripts/' + name);
+                const data = await res.json();
+                if (!res.ok) return notify(data.error || "Access Denied.");
 
                 document.getElementById('view-title').innerText = name;
-                document.getElementById('view-loader').value = `loadstring(game:HttpGet("https://ypibsvanderdev.github.io/LuaOrb/raw/${name}"))()`;
-                document.getElementById('view-content').value = scriptData.content || "-- No content stored.";
+                document.getElementById('view-loader').value = `loadstring(game:HttpGet("https://sushix-protect-elite.onrender.com/raw/${name}"))()`;
+                document.getElementById('view-content').value = data.content;
 
+                const scriptData = lastScripts.find(s => s.name === name);
                 const canManage = scriptData ? scriptData.isOwner : false;
 
                 document.getElementById('delete-btn').style.display = canManage ? 'block' : 'none';
@@ -1168,31 +1158,28 @@
                 const script = document.getElementById('scriptSource').value;
                 if (!name || !script) return notify("All fields are required.");
 
-                const obfBtn = document.querySelector('#crypt .card .btn');
-                if (obfBtn) {
-                    obfBtn.innerText = "DEPLOYING NANOBOTS...";
-                    obfBtn.disabled = true;
-                }
+                const obfBtn = document.querySelector('.btn');
+                obfBtn.innerText = "DEPLOYING NANOBOTS...";
+                obfBtn.disabled = true;
 
-                setTimeout(() => {
-                    const loader = `loadstring(game:HttpGet("https://ypibsvanderdev.github.io/LuaOrb/raw/${name}"))()`;
-                    document.getElementById('loaderVal').value = loader;
+                try {
+                    const res = await fetch('/api/obfuscate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, script })
+                    });
+                    const data = await res.json();
+                    document.getElementById('loaderVal').value = data.loader;
                     document.getElementById('resultCard').style.display = 'block';
-
-                    const cleanName = name.replace('.lua', '').toLowerCase().replace(/ /g, '_');
-                    const newScript = { name: cleanName + ".lua", size: (script.length / 1024).toFixed(1) + ' KB', protection: 'ELITE' };
-                    let scriptVault = JSON.parse(localStorage.getItem('SUSHIX_scripts')) || [];
-                    scriptVault.unshift(newScript);
-                    localStorage.setItem('SUSHIX_scripts', JSON.stringify(scriptVault));
-
                     notify("Asset secured and hosted in vault.");
                     loadFiles();
-
-                    if (obfBtn) {
-                        obfBtn.innerText = "PROTECT & DEPLOY ASSET";
-                        obfBtn.disabled = false;
-                    }
-                }, 1500);
+                    updateStats();
+                } catch (e) {
+                    notify("Encryption relay failed.");
+                } finally {
+                    obfBtn.innerText = "PROTECT & DEPLOY ASSET";
+                    obfBtn.disabled = false;
+                }
             }
 
             async function reg(type) {
@@ -1283,14 +1270,11 @@
 
             async function deleteCur() {
                 if (!confirm("Are you sure you want to permanently shred this asset?")) return;
-
-                let scripts = JSON.parse(localStorage.getItem('SUSHIX_scripts')) || [];
-                scripts = scripts.filter(s => s.name !== currentFile);
-                localStorage.setItem('SUSHIX_scripts', JSON.stringify(scripts));
-
+                await fetch('/api/scripts/' + currentFile, { method: 'DELETE' });
                 notify("File purged from encrypted vault.");
                 showPanel('explorer');
                 loadFiles();
+                updateStats();
             }
 
             function showPanel(id, el) {
@@ -1305,45 +1289,25 @@
                 if (id === 'settings') loadHubSettings();
             }
 
-            function luaorbObfuscate(source) {
-                if (!source || source.trim() === '') return "-- [!] Error: No input provided.";
-                let protectionHeader = `-- [[ SUSHIX ENVIRONMENT INTEGRITY CHECK ]] --\nlocal function _O()\n    local _h = {["User-Agent"] = "Roblox/WinInet"}\n    if not (identifyexecutor or getexecutorname) then\n        while true do end\n    end\nend\npcall(_O)\n`;
-                const lines = source.split('\n').filter(l => l.trim() !== '');
-                const states = [];
-                lines.forEach((line, index) => {
-                    states.push({ id: (index + 1) * 100, code: line, next: (index + 1 < lines.length) ? (index + 2) * 100 : 0 });
-                });
-                const sym = { SV: "_S" + Math.random().toString(36).substr(2, 5), DS: "_D" + Math.random().toString(36).substr(2, 5), ENV: "_E" + Math.random().toString(36).substr(2, 5) };
-                let lua = protectionHeader + `\nlocal ${sym.ENV} = {loadstring or load, table.concat, string.char };\n`;
-                lua += `local function run(...)\n`;
-                lua += `    local ${sym.SV} = ${states[0] ? states[0].id : 0};\n`;
-                lua += `    local ${sym.DS} = {\n`;
-                states.forEach(s => {
-                    const key = Math.floor(Math.random() * 255);
-                    const bytes = Array.from(new TextEncoder().encode(s.code));
-                    const enc = bytes.map(b => b ^ key);
-                    lua += `        [${s.id}] = function() local _c={${enc.join(',')}}; local _k=${key}; local _r={};\n`;
-                    lua += `        for i=1,#_c do _r[i]=${sym.ENV}[3]((bit32 and bit32.bxor(_c[i],_k) or _c[i]-_k%256)) end;\n`;
-                    lua += `        ${sym.ENV}[1](${sym.ENV}[2](_r))(); return ${s.next} end,\n`;
-                });
-                lua += `    };\n    while ${sym.SV} ~= 0 do ${sym.SV} = ${sym.DS}[${sym.SV}]() end\nend\nreturn run(...)\n`;
-                return lua;
-            }
-
             async function executePureObf() {
                 const script = document.getElementById('pure-input').value;
                 if (!script) return notify("☣️ @#$% SOURCE REQUIRED ^&*");
 
                 notify("☣️ COMMENCING @#$% PROTECTION ^&*...");
-                setTimeout(() => {
-                    try {
-                        let result = luaorbObfuscate(script);
-                        document.getElementById('pure-output').value = result;
+                try {
+                    const res = await fetch('/api/obfuscate/pure', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ script })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        document.getElementById('pure-output').value = data.result;
                         notify("☣️ @#$% PROTECTION COMPLETE ^&*");
-                    } catch (e) {
-                        notify("☣️ FATAL @#$% ERROR: " + e.message);
+                    } else {
+                        notify("☣️ FATAL @#$% ERROR: " + data.error);
                     }
-                }, 1000);
+                } catch (e) { notify("☣️ RELAY @#$% FAILED ^&*"); }
             }
 
             function notify(m) {
@@ -1361,7 +1325,7 @@
             }
 
             function setAuthMode(mode) {
-                // Removed
+                // Not needed for a passcode lock
             }
 
             let loginAttempts = 0;
@@ -1373,13 +1337,19 @@
                     return;
                 }
 
-                if (password === 'Eman165*') {
-                    localStorage.setItem('SUSHIX_auth', JSON.stringify({ name: "Admin", email: "admin" }));
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                const data = await res.json();
+
+                if (data.success) {
                     checkAuth();
-                    notify("Access Granted. Welcome to SushiX.");
+                    notify("Access Granted. Welcome to SushiX Protected Gateway.");
                 } else {
                     loginAttempts++;
-                    alert(`Incorrect password. Attempts remaining: ${10 - loginAttempts}`);
+                    alert(`Incorrect Access Code. Attempts remaining: ${10 - loginAttempts}`);
                     if (loginAttempts >= 10) {
                         document.getElementById('login-form').innerHTML = '<h3 style="color:var(--danger)">SECURITY LOCKOUT: MAX ATTEMPTS REACHED</h3>';
                     }
@@ -1387,55 +1357,39 @@
             }
 
             async function doRegister() {
-                // Removed
+                // Not needed
             }
 
             async function checkAuth() {
-                const session = localStorage.getItem('SUSHIX_auth');
-                if (session) {
-                    const user = JSON.parse(session);
-                    document.getElementById('login-screen').style.display = 'none';
-                    document.getElementById('dashboard-container').style.display = 'flex';
-                    document.getElementById('user-email').innerText = user.name || user.email;
-                    loadFiles();
-                    updateStats();
-                } else {
+                try {
+                    const res = await fetch('/api/auth/me');
+                    const data = await res.json();
+                    if (data.success) {
+                        document.getElementById('login-screen').style.display = 'none';
+                        document.getElementById('dashboard-container').style.display = 'flex';
+                        document.getElementById('user-email').innerText = data.user.name || data.user.email || 'Admin';
+                        loadFiles();
+                        updateStats();
+                    } else {
+                        document.getElementById('login-screen').style.display = 'flex';
+                        document.getElementById('dashboard-container').style.display = 'none';
+                    }
+                } catch (e) {
                     document.getElementById('login-screen').style.display = 'flex';
                     document.getElementById('dashboard-container').style.display = 'none';
                 }
             }
 
             function initGoogleAuth() {
-                document.getElementById('login-screen').style.display = 'flex';
-                document.getElementById('dashboard-container').style.display = 'none';
-
-                google.accounts.id.initialize({
-                    client_id: '945575151017-o0mh8usjvn9r23lnid2th5g13qg8lpgv.apps.googleusercontent.com',
-                    callback: handleCredentialResponse
-                });
-                google.accounts.id.renderButton(
-                    document.getElementById("google-login-btn"),
-                    { theme: "filled_black", size: "large", width: 300 }
-                );
+                // Removed
             }
 
             async function handleCredentialResponse(response) {
-                const res = await fetch('/api/auth/google', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ credential: response.credential })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    checkAuth();
-                    notify("Access Granted. Welcome back, " + data.user.name);
-                } else {
-                    alert("Login Failed: " + (data.error || "Unknown Error"));
-                }
+                // Removed
             }
 
             async function logout() {
-                localStorage.removeItem('SUSHIX_auth');
+                await fetch('/api/auth/logout', { method: 'POST' });
                 location.reload();
             }
 
